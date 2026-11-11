@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -8,6 +9,23 @@ plugins {
     // Sin este plugin Crashlytics no tiene build ID y la app se cierra al iniciar.
     alias(libs.plugins.firebaseCrashlytics)
 }
+
+// Guía 14: datos de firma fuera del repositorio. keystore.properties está en
+// .gitignore y apunta a un .jks guardado fuera de la carpeta del proyecto.
+// Si el archivo no existe (un clon nuevo, la integración continua), el
+// proyecto igual compila en debug; solo el release queda sin firmar.
+val archivoFirma = rootProject.file("keystore.properties")
+val firma = Properties().apply {
+    if (archivoFirma.exists()) {
+        archivoFirma.inputStream().use { load(it) }
+    }
+}
+
+// Guía 14: URL de PharmaSoft según dónde corre la app.
+//   Emulador (por defecto): http://10.0.2.2:8080/api/v1/
+//   Celular en la misma wifi: ./gradlew entregaAndroid -PurlServicio=http://10.40.29.85:8080/api/v1/
+val urlServicio = (findProperty("urlServicio") as String? ?: "http://10.0.2.2:8080/api/v1/")
+    .let { if (it.endsWith("/")) it else "$it/" }
 
 kotlin {
     compilerOptions {
@@ -26,6 +44,8 @@ dependencies {
 }
 
 android {
+    // Se mantiene el paquete registrado en Firebase (pharmamobil-1c729) en
+    // lugar de pe.upeu.<proyecto>: cambiarlo invalida google-services.json.
     namespace = "pe.edu.upeu.pharmamobil"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
@@ -33,9 +53,23 @@ android {
         applicationId = "pe.edu.upeu.pharmamobil"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
+        // Guía 14: versión de entrega. Cada corrección posterior sube versionCode.
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
+        buildConfigField("String", "URL_SERVICIO", "\"$urlServicio\"")
     }
+
+    signingConfigs {
+        if (archivoFirma.exists()) {
+            create("entrega") {
+                storeFile = file(firma.getProperty("storeFile"))
+                storePassword = firma.getProperty("storePassword")
+                keyAlias = firma.getProperty("keyAlias")
+                keyPassword = firma.getProperty("keyPassword")
+            }
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -43,11 +77,16 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Guía 14: R8 reduce y ofusca; las reglas propias están en proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (archivoFirma.exists()) {
+                signingConfig = signingConfigs.getByName("entrega")
+            }
         }
     }
     compileOptions {
@@ -56,5 +95,43 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+}
+
+// Guía 14: artefactos de entrega con la nomenclatura del curso
+// (Equipo1_ProyectoFinal_Android.aab / .apk) en la carpeta entrega/ de la raíz.
+// Uso: ./gradlew :androidApp:entregaAndroid [-PurlServicio=http://<IP-PC>:8080/api/v1/]
+// Cada tarea copia sus valores a variables locales: el configuration cache no
+// admite referencias al script dentro de rename { } ni doLast { }.
+val carpetaEntrega = rootProject.layout.projectDirectory.dir("entrega")
+
+val copiarAab by tasks.registering(Copy::class) {
+    val destino = "Equipo1_ProyectoFinal_Android.aab"
+    dependsOn("bundleRelease")
+    from(layout.buildDirectory.dir("outputs/bundle/release")) { include("*.aab") }
+    into(carpetaEntrega)
+    rename { destino }
+}
+
+val copiarApk by tasks.registering(Copy::class) {
+    val destino = "Equipo1_ProyectoFinal_Android.apk"
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.dir("outputs/apk/release")) { include("*.apk") }
+    into(carpetaEntrega)
+    rename { destino }
+}
+
+tasks.register("entregaAndroid") {
+    group = "entrega"
+    description = "Genera el AAB y el APK firmados y los copia a entrega/ con la nomenclatura del curso."
+    dependsOn(copiarAab, copiarApk)
+    val sinFirma = !archivoFirma.exists()
+    val ruta = carpetaEntrega.asFile.path
+    doLast {
+        if (sinFirma) {
+            logger.warn("Sin keystore.properties: los artefactos de entrega/ NO están firmados.")
+        }
+        logger.lifecycle("Artefactos en $ruta")
     }
 }

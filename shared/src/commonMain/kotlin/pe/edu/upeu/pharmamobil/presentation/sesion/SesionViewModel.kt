@@ -11,6 +11,7 @@ import pe.edu.upeu.pharmamobil.domain.model.ErrorSesion
 import pe.edu.upeu.pharmamobil.domain.sesion.AvisoSesion
 import pe.edu.upeu.pharmamobil.domain.sesion.AvisosDeSesion
 import pe.edu.upeu.pharmamobil.domain.usecase.CerrarSesionUseCase
+import pe.edu.upeu.pharmamobil.domain.usecase.ContarCambiosSinEnviarUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.IniciarSesionUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.LoginInvalidoException
 import pe.edu.upeu.pharmamobil.domain.usecase.SesionGuardadaUseCase
@@ -24,7 +25,8 @@ class SesionViewModel(
     private val iniciarSesion: IniciarSesionUseCase,
     private val sesionGuardada: SesionGuardadaUseCase,
     private val cerrarSesion: CerrarSesionUseCase,
-    private val avisos: AvisosDeSesion
+    private val avisos: AvisosDeSesion,
+    private val contarCambiosSinEnviar: ContarCambiosSinEnviarUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SesionUiState())
@@ -45,7 +47,8 @@ class SesionViewModel(
         viewModelScope.launch {
             avisos.sesionTerminada.collect { aviso ->
                 if (_uiState.value.sesion != null) {
-                    terminarSesion(aviso = textoDelAviso(aviso))
+                    // Un 401 conserva la base local: ver CerrarSesionUseCase.
+                    terminarSesion(aviso = textoDelAviso(aviso), conservarDatosLocales = true)
                 }
             }
         }
@@ -93,9 +96,30 @@ class SesionViewModel(
         }
     }
 
-    /** Accion «Cerrar sesion»: borra el token y devuelve al login. */
+    /**
+     * Accion «Cerrar sesion»: borra el token, vacia la base local y devuelve
+     * al login. Guía 14 (hueco 8): si hay cambios sin enviar, antes pide
+     * confirmacion (cambiosPorPerder) porque se perderian.
+     */
     fun cerrarSesion() {
-        viewModelScope.launch { terminarSesion(aviso = null) }
+        viewModelScope.launch {
+            val sinEnviar = contarCambiosSinEnviar()
+            if (sinEnviar > 0) {
+                _uiState.update { it.copy(cambiosPorPerder = sinEnviar) }
+            } else {
+                terminarSesion(aviso = null, conservarDatosLocales = false)
+            }
+        }
+    }
+
+    /** «Cerrar sesión igual» en el dialogo: el usuario acepta perder los cambios. */
+    fun confirmarCerrarSesion() {
+        viewModelScope.launch { terminarSesion(aviso = null, conservarDatosLocales = false) }
+    }
+
+    /** «Cancelar» en el dialogo: la sesion sigue y los cambios esperan a la red. */
+    fun cancelarCerrarSesion() {
+        _uiState.update { it.copy(cambiosPorPerder = null) }
     }
 
     /**
@@ -103,8 +127,8 @@ class SesionViewModel(
      * de la sesion previa quedan en el login. Solo se conserva el contador
      * idSesion, que no se muestra.
      */
-    private suspend fun terminarSesion(aviso: String?) {
-        cerrarSesion.invoke()
+    private suspend fun terminarSesion(aviso: String?, conservarDatosLocales: Boolean) {
+        cerrarSesion(conservarDatosLocales)
         _uiState.update {
             SesionUiState(
                 verificando = false,

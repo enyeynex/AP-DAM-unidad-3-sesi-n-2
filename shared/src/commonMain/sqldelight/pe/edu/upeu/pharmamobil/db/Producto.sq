@@ -69,3 +69,12 @@ siguienteIdLocal:
 -- COALESCE evita el NULL de la tabla vacia; el minOf de Kotlin
 -- garantiza que el id resultante sea siempre negativo.
 SELECT COALESCE(MIN(id), 0) FROM producto;
+
+-- Guía 14 (hueco 8): lo que se perdería al cerrar sesión. Cuenta toda fila
+-- creada sin red que PharmaSoft todavía no tiene: en cola, agotada o rechazada.
+contarSinEnviar:
+SELECT COUNT(*) FROM producto WHERE pendiente = 1;
+
+-- Guía 14 (hueco 8): «Cerrar sesión» deja el teléfono sin datos del usuario.
+borrarTodo:
+DELETE FROM producto;

@@ -170,7 +170,8 @@ class ProductoViewModelTest {
 
         val estado = nuevoViewModel(repositorio).uiState.value
 
-        assertEquals("Sin conexión: mostrando datos guardados", estado.avisoRed)
+        // Guía 14 (hueco 9): sin red no hay aviso propio; lo dice la banda de sincronización.
+        assertNull(estado.avisoRed)
         assertFalse(estado.sincronizando)
         val fase = assertIs<ProductoUiState.Fase.ConProductos>(estado.fase)
         assertEquals("Paracetamol", fase.productos.single().nombre)
@@ -219,7 +220,7 @@ class ProductoViewModelTest {
 
         assertNull(estado.ultimaSincronizacion)
         assertEquals(ProductoUiState.Fase.SinProductos, estado.fase)
-        assertEquals("Sin conexión: mostrando datos guardados", estado.avisoRed)
+        assertNull(estado.avisoRed)
     }
 
     @Test
@@ -250,5 +251,18 @@ class ProductoViewModelTest {
         val fase = assertIs<ProductoUiState.Fase.ConProductos>(viewModel.uiState.value.fase)
         assertEquals(listOf(1L), fase.productos.map { it.id })
         assertEquals(0, viewModel.uiState.value.rechazados)
+    }
+
+    @Test
+    fun unErrorDelServidorSiMuestraSuPropioAviso() = runTest {
+
+        val repositorio = FakeProductoRepository().apply {
+            fallaAlSincronizar = IllegalStateException("HTTP 500")
+        }
+
+        val estado = nuevoViewModel(repositorio).uiState.value
+
+        // La banda solo habla de la conexión: un 500 necesita su aviso.
+        assertEquals("No se pudo sincronizar: HTTP 500", estado.avisoRed)
     }
 }

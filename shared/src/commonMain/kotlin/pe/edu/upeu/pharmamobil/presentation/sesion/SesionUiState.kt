@@ -13,5 +13,10 @@ data class SesionUiState(
     /** Motivo por el que se volvio al login sin que el usuario lo pidiera (401). */
     val aviso: String? = null,
     /** Cambia con cada sesion nueva para que las pantallas no muestren datos del usuario anterior. */
-    val idSesion: Int = 0
+    val idSesion: Int = 0,
+    /**
+     * Guía 14 (hueco 8): si no es null, el usuario pidió cerrar sesión con N
+     * cambios sin enviar y la interfaz debe pedir confirmación.
+     */
+    val cambiosPorPerder: Int? = null
 )

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
@@ -157,6 +159,14 @@ fun App() = KoinContext {
                     onCambiarTema = { darkTheme = it },
                     onCerrarSesion = sesionViewModel::cerrarSesion
                 )
+
+                estado.cambiosPorPerder?.let { cambios ->
+                    DialogoCambiosSinEnviar(
+                        cambios = cambios,
+                        onCancelar = sesionViewModel::cancelarCerrarSesion,
+                        onCerrarIgual = sesionViewModel::confirmarCerrarSesion
+                    )
+                }
             }
         }
     }
@@ -252,7 +262,7 @@ private fun PantallaPrincipal(
 
                     HorizontalDivider()
 
-                    // Borra el token del almacen y devuelve al login.
+                    // Borra el token y la base local (Guía 14, hueco 8) y devuelve al login.
                     NavigationDrawerItem(
                         label = {
                             Text("Cerrar sesión")
@@ -423,6 +433,37 @@ private fun PantallaPrincipal(
             }
         }
     }
+}
+
+
+/**
+ * Guía 14 (hueco 8): cerrar sesión vacía la base local. Si quedan cambios
+ * hechos sin red, se avisa antes porque se perderían.
+ */
+@Composable
+private fun DialogoCambiosSinEnviar(
+    cambios: Int,
+    onCancelar: () -> Unit,
+    onCerrarIgual: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancelar,
+        title = { Text("Cambios sin enviar") },
+        text = {
+            Text(
+                if (cambios == 1) "Tienes 1 cambio sin enviar. Si cierras sesión se perderá."
+                else "Tienes $cambios cambios sin enviar. Si cierras sesión se perderán."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onCerrarIgual) {
+                Text("Cerrar sesión igual", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelar) { Text("Cancelar") }
+        }
+    )
 }
 
 

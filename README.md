@@ -312,3 +312,85 @@ implementa `ServicioPush`. La telemetría registra los envíos fallidos con cont
 `SincronizacionTest` (MockEngine + SQLite en memoria), `SincronizacionUiStateTest`,
 `PermisosViewModelTest` (gestor de permisos falso y la tabla de los tres estados) y `MigracionTest`
 (v1 → v4).
+
+## Firma y builds de entrega (sesión 14)
+
+Rama `feature/builds-14`. La ficha de cierre de los huecos está en `docs/ficha-cierre-14.md`.
+
+### 1. Crear el almacén de claves (una sola vez, fuera del repositorio)
+
+```powershell
+mkdir $HOME\claves-dam
+keytool -genkeypair -v -keystore $HOME\claves-dam\equipo1-entrega.jks -storetype PKCS12 `
+  -keyalg RSA -keysize 2048 -validity 10000 -alias equipo1
+```
+
+- Guarda el `.jks` y sus contraseñas en un lugar seguro, con copia (USB o gestor de contraseñas).
+  **Si se pierde, no se puede publicar una actualización con la misma firma.**
+- Nunca dentro de la carpeta del proyecto ni en el repositorio: `.gitignore` excluye `*.jks`,
+  `*.keystore` y `keystore.properties`.
+
+### 2. `keystore.properties` en la raíz del proyecto (no se versiona)
+
+```properties
+storeFile=C:/Users/<tu-usuario>/claves-dam/equipo1-entrega.jks
+storePassword=********
+keyAlias=equipo1
+keyPassword=********
+```
+
+Usa `/` en la ruta, también en Windows. Si el archivo no existe, el proyecto igual compila en debug
+y el release sale sin firmar.
+
+### 3. Generar los artefactos
+
+```powershell
+# Emulador (URL por defecto http://10.0.2.2:8080/api/v1/)
+.\gradlew :androidApp:entregaAndroid
+
+# Celulares reales en la misma wifi que la PC
+.\gradlew :androidApp:entregaAndroid -PurlServicio=http://10.40.29.85:8080/api/v1/
+```
+
+La tarea ejecuta `bundleRelease` y `assembleRelease`, y copia los resultados con la nomenclatura del
+curso:
+
+- `entrega/Equipo1_ProyectoFinal_Android.aab` (para Play Console)
+- `entrega/Equipo1_ProyectoFinal_Android.apk` (para instalar en los celulares de prueba)
+
+Verificar la firma y obtener el SHA-256 para la ficha de versión:
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\build-tools\36.0.0\apksigner.bat" verify --print-certs `
+  entrega\Equipo1_ProyectoFinal_Android.apk
+```
+
+Instalar en un celular conectado por USB: `adb install -r entrega\Equipo1_ProyectoFinal_Android.apk`.
+
+### 4. Celulares reales: `urlServicio` y red
+
+1. Averigua la IP de la PC en la wifi: `ipconfig` → «Dirección IPv4» (por ejemplo `10.40.29.85`).
+2. Pon esa IP en `androidApp/src/main/res/xml/network_security_config.xml`, porque Android solo
+   permite HTTP sin TLS hacia los anfitriones de esa lista.
+3. Compila con `-PurlServicio=http://<IP>:8080/api/v1/`. El valor llega a la app como
+   `BuildConfig.URL_SERVICIO` y `MainApplication` lo pasa a `shared` antes de crear el cliente HTTP.
+   iOS no cambia: sigue usando `localhost`.
+4. Abre el puerto 8080 en el firewall de Windows (PowerShell como administrador):
+
+   ```powershell
+   New-NetFirewallRule -DisplayName "PharmaSoft 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
+   ```
+
+   La red wifi debe estar como **Privada**. Las redes de la universidad suelen aislar a los
+   clientes entre sí; si los celulares no llegan a la PC, usa el punto de acceso del teléfono.
+5. PharmaSoft debe escuchar en todas las interfaces (`server.address=0.0.0.0`), no solo en
+   `localhost`.
+
+### 5. R8
+
+El release usa `isMinifyEnabled = true` con `proguard-android-optimize.txt` y
+`androidApp/proguard-rules.pro`. Las reglas propias están comentadas una por una en ese archivo.
+
+### iOS
+
+Los pasos de firma en Xcode y la limitación (no hay Mac en el equipo) están en `docs/ios-firma-14.md`.

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import pe.edu.upeu.pharmamobil.db.PharmaDb
 import pe.edu.upeu.pharmamobil.domain.model.Producto
+import pe.edu.upeu.pharmamobil.domain.repository.DatosLocalesRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ProductoLocalRepository
 import pe.edu.upeu.pharmamobil.domain.usecase.SincronizarUseCase
 import pe.edu.upeu.pharmamobil.db.Producto as FilaProducto
@@ -18,7 +19,7 @@ import pe.edu.upeu.pharmamobil.db.Producto as FilaProducto
  * traduce entre las filas generadas por SQLDelight y el modelo de dominio.
  * No conoce Ktor ni los DTO de PharmaSoft.
  */
-class ProductoLocal(base: PharmaDb) : ProductoLocalRepository {
+class ProductoLocal(base: PharmaDb) : ProductoLocalRepository, DatosLocalesRepository {
 
     private val consultas = base.productoQueries
     private val sincronizaciones = base.sincronizacionQueries
@@ -129,6 +130,17 @@ class ProductoLocal(base: PharmaDb) : ProductoLocalRepository {
 
     override fun registrarSincronizacion(instante: Long) {
         sincronizaciones.registrar(instante)
+    }
+
+    override fun contarSinEnviar(): Int =
+        consultas.contarSinEnviar().executeAsOne().toInt()
+
+    /** Guía 14 (hueco 8): una sola transacción, para que la lista se vacíe de una vez. */
+    override fun borrarTodo() {
+        consultas.transaction {
+            consultas.borrarTodo()
+            sincronizaciones.borrarTodo()
+        }
     }
 
     private fun FilaProducto.aDominio() = Producto(
