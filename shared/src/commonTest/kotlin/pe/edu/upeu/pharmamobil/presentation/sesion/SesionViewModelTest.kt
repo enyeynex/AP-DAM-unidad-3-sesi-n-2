@@ -11,8 +11,10 @@ import pe.edu.upeu.pharmamobil.domain.model.ErrorSesion
 import pe.edu.upeu.pharmamobil.domain.model.FalloSesionException
 import pe.edu.upeu.pharmamobil.domain.model.Sesion
 import pe.edu.upeu.pharmamobil.domain.repository.AuthRepository
+import pe.edu.upeu.pharmamobil.domain.repository.DatosLocalesRepository
 import pe.edu.upeu.pharmamobil.domain.sesion.AvisosDeSesion
 import pe.edu.upeu.pharmamobil.domain.usecase.CerrarSesionUseCase
+import pe.edu.upeu.pharmamobil.domain.usecase.ContarCambiosSinEnviarUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.IniciarSesionUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.SesionGuardadaUseCase
 import kotlin.test.AfterTest
@@ -43,6 +45,13 @@ class SesionViewModelTest {
         override suspend fun cerrarSesion() { cerrada = true; guardada = null }
     }
 
+    /** Base local simulada: cuenta filas sin enviar y registra si se vació. */
+    private class FakeDatosLocales(var sinEnviar: Int = 0, var filas: Int = 3) : DatosLocalesRepository {
+        var borrada = false
+        override fun contarSinEnviar(): Int = sinEnviar
+        override fun borrarTodo() { borrada = true; filas = 0; sinEnviar = 0 }
+    }
+
     @BeforeTest
     fun instalarMain() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -53,12 +62,17 @@ class SesionViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun nuevoViewModel(repositorio: FakeAuthRepository, avisos: AvisosDeSesion = AvisosDeSesion()) =
+    private fun nuevoViewModel(
+        repositorio: FakeAuthRepository,
+        avisos: AvisosDeSesion = AvisosDeSesion(),
+        local: FakeDatosLocales = FakeDatosLocales()
+    ) =
         SesionViewModel(
             iniciarSesion = IniciarSesionUseCase(repositorio),
             sesionGuardada = SesionGuardadaUseCase(repositorio),
-            cerrarSesion = CerrarSesionUseCase(repositorio),
-            avisos = avisos
+            cerrarSesion = CerrarSesionUseCase(repositorio, local),
+            avisos = avisos,
+            contarCambiosSinEnviar = ContarCambiosSinEnviarUseCase(local)
         )
 
     @Test
@@ -179,5 +193,83 @@ class SesionViewModelTest {
 
         assertNotNull(viewModel.uiState.value.sesion)
         assertTrue(viewModel.uiState.value.idSesion > primera)
+    }
+
+    // --- Guía 14, hueco 8: la base local al cerrar sesión ---
+
+    @Test
+    fun cerrarSesionSinCambiosPendientesVaciaLaBaseLocal() = runTest {
+        val repositorio = FakeAuthRepository(guardada = admin)
+        val local = FakeDatosLocales(sinEnviar = 0)
+        val viewModel = nuevoViewModel(repositorio, local = local)
+
+        viewModel.cerrarSesion()
+
+        assertNull(viewModel.uiState.value.sesion)
+        assertNull(viewModel.uiState.value.cambiosPorPerder)
+        assertTrue(repositorio.cerrada)
+        assertTrue(local.borrada)
+        assertEquals(0, local.filas)
+    }
+
+    @Test
+    fun conCambiosSinEnviarPideConfirmacionYNoBorraNada() = runTest {
+        val repositorio = FakeAuthRepository(guardada = admin)
+        val local = FakeDatosLocales(sinEnviar = 2)
+        val viewModel = nuevoViewModel(repositorio, local = local)
+
+        viewModel.cerrarSesion()
+
+        assertEquals(2, viewModel.uiState.value.cambiosPorPerder)
+        assertEquals(admin, viewModel.uiState.value.sesion)
+        assertFalse(repositorio.cerrada)
+        assertFalse(local.borrada)
+    }
+
+    @Test
+    fun cancelarElDialogoMantieneLaSesionYLosCambios() = runTest {
+        val repositorio = FakeAuthRepository(guardada = admin)
+        val local = FakeDatosLocales(sinEnviar = 2)
+        val viewModel = nuevoViewModel(repositorio, local = local)
+
+        viewModel.cerrarSesion()
+        viewModel.cancelarCerrarSesion()
+
+        assertNull(viewModel.uiState.value.cambiosPorPerder)
+        assertEquals(admin, viewModel.uiState.value.sesion)
+        assertEquals(2, local.sinEnviar)
+        assertFalse(local.borrada)
+    }
+
+    @Test
+    fun cerrarSesionIgualBorraLosCambiosYVuelveAlLogin() = runTest {
+        val repositorio = FakeAuthRepository(guardada = admin)
+        val local = FakeDatosLocales(sinEnviar = 2)
+        val viewModel = nuevoViewModel(repositorio, local = local)
+
+        viewModel.cerrarSesion()
+        viewModel.confirmarCerrarSesion()
+
+        assertNull(viewModel.uiState.value.sesion)
+        assertNull(viewModel.uiState.value.cambiosPorPerder)
+        assertTrue(repositorio.cerrada)
+        assertTrue(local.borrada)
+    }
+
+    @Test
+    fun unCierrePor401ConservaLaBaseLocal() = runTest {
+        val repositorio = FakeAuthRepository(guardada = admin)
+        val local = FakeDatosLocales(sinEnviar = 2)
+        val avisos = AvisosDeSesion()
+        val viewModel = nuevoViewModel(repositorio, avisos, local)
+
+        avisos.notificar(ErrorSesion.SesionExpirada)
+
+        assertNull(viewModel.uiState.value.sesion)
+        assertTrue(repositorio.cerrada)
+        // El usuario no eligió salir: sus cambios se envían al volver a entrar.
+        assertFalse(local.borrada)
+        assertEquals(2, local.sinEnviar)
+        assertNull(viewModel.uiState.value.cambiosPorPerder)
     }
 }

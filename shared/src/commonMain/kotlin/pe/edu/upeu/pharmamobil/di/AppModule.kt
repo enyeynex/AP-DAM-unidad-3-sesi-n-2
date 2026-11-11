@@ -21,6 +21,7 @@ import pe.edu.upeu.pharmamobil.data.repository.EnvioRepositorioRest
 import pe.edu.upeu.pharmamobil.domain.port.ServicioPush
 import pe.edu.upeu.pharmamobil.domain.port.Telemetria
 import pe.edu.upeu.pharmamobil.data.repository.ProductoRepositorioOffline
+import pe.edu.upeu.pharmamobil.domain.repository.DatosLocalesRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ProductoLocalRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ProductoRemotoRepository
 import pe.edu.upeu.pharmamobil.domain.usecase.SincronizarUseCase
@@ -30,6 +31,7 @@ import pe.edu.upeu.pharmamobil.domain.repository.ProductoRepository
 import pe.edu.upeu.pharmamobil.domain.sesion.AvisosDeSesion
 import pe.edu.upeu.pharmamobil.domain.sesion.DiagnosticoSesion
 import pe.edu.upeu.pharmamobil.domain.usecase.CerrarSesionUseCase
+import pe.edu.upeu.pharmamobil.domain.usecase.ContarCambiosSinEnviarUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.DescartarProductoUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.ObservarEstadoSincronizacionUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.IniciarSesionUseCase
@@ -62,6 +64,7 @@ val dataModule = module {
     single { PharmaDb(get<CreadorDeDriver>().crear()) }
     single { ProductoLocal(get()) }
     single<ProductoLocalRepository> { get<ProductoLocal>() }
+    single<DatosLocalesRepository> { get<ProductoLocal>() }
     single<ProductoApi> { ProductoApiRest(get(), get()) }
     single<ProductoRemotoRepository> { EnvioRepositorioRest(get()) }
     // single: su Mutex debe ser el mismo para el init, el registro y el botón.
@@ -86,7 +89,8 @@ val domainModule = module {
     factory { RegistrarClienteUseCase(get()) }
     factory { ListarClientesUseCase(get()) }
     factory { IniciarSesionUseCase(get()) }
-    factory { CerrarSesionUseCase(get()) }
+    factory { CerrarSesionUseCase(get(), get()) }
+    factory { ContarCambiosSinEnviarUseCase(get()) }
     factory { SesionGuardadaUseCase(get()) }
 }
 
@@ -97,7 +101,7 @@ val presentationModule = module {
     viewModel { ClienteViewModel(get(), get()) }
     // El Compartidor lo aporta el platformModule de cada plataforma.
     viewModel { DetalleProductoViewModel(get(), get()) }
-    viewModel { SesionViewModel(get(), get(), get(), get()) }
+    viewModel { SesionViewModel(get(), get(), get(), get(), get()) }
     viewModel { DiagnosticoViewModel(get(), get(), get(), get(ES_DEPURACION)) }
 }
 
