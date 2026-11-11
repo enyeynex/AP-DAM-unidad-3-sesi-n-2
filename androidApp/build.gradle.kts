@@ -98,3 +98,40 @@ android {
         buildConfig = true
     }
 }
+
+// Guía 14: artefactos de entrega con la nomenclatura del curso
+// (Equipo1_ProyectoFinal_Android.aab / .apk) en la carpeta entrega/ de la raíz.
+// Uso: ./gradlew :androidApp:entregaAndroid [-PurlServicio=http://<IP-PC>:8080/api/v1/]
+// Cada tarea copia sus valores a variables locales: el configuration cache no
+// admite referencias al script dentro de rename { } ni doLast { }.
+val carpetaEntrega = rootProject.layout.projectDirectory.dir("entrega")
+
+val copiarAab by tasks.registering(Copy::class) {
+    val destino = "Equipo1_ProyectoFinal_Android.aab"
+    dependsOn("bundleRelease")
+    from(layout.buildDirectory.dir("outputs/bundle/release")) { include("*.aab") }
+    into(carpetaEntrega)
+    rename { destino }
+}
+
+val copiarApk by tasks.registering(Copy::class) {
+    val destino = "Equipo1_ProyectoFinal_Android.apk"
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.dir("outputs/apk/release")) { include("*.apk") }
+    into(carpetaEntrega)
+    rename { destino }
+}
+
+tasks.register("entregaAndroid") {
+    group = "entrega"
+    description = "Genera el AAB y el APK firmados y los copia a entrega/ con la nomenclatura del curso."
+    dependsOn(copiarAab, copiarApk)
+    val sinFirma = !archivoFirma.exists()
+    val ruta = carpetaEntrega.asFile.path
+    doLast {
+        if (sinFirma) {
+            logger.warn("Sin keystore.properties: los artefactos de entrega/ NO están firmados.")
+        }
+        logger.lifecycle("Artefactos en $ruta")
+    }
+}
