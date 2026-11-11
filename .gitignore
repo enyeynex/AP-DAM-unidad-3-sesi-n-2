@@ -20,3 +20,11 @@ node_modules/
 
 # Guía 13: configuración de Firebase de cada estudiante (se descarga de la consola).
 androidApp/google-services.json
+
+# Guía 14: firma de entrega. El almacén de claves y sus contraseñas nunca se
+# versionan; el .jks se guarda fuera del repositorio (ver README).
+keystore.properties
+*.jks
+*.keystore
+# Artefactos firmados que copia la tarea entregaAndroid.
+entrega/
