@@ -15,7 +15,15 @@ import pe.edu.upeu.pharmamobil.data.remote.ProductoApiRest
 import pe.edu.upeu.pharmamobil.data.remote.crearHttpClient
 import pe.edu.upeu.pharmamobil.data.repository.AuthRepositorioRest
 import pe.edu.upeu.pharmamobil.data.repository.ClienteRepositorioRest
+import pe.edu.upeu.pharmamobil.data.firebase.TelemetriaFirebase
+import pe.edu.upeu.pharmamobil.data.firebase.TokenPushFirebase
+import pe.edu.upeu.pharmamobil.data.repository.EnvioRepositorioRest
+import pe.edu.upeu.pharmamobil.domain.port.ServicioPush
+import pe.edu.upeu.pharmamobil.domain.port.Telemetria
 import pe.edu.upeu.pharmamobil.data.repository.ProductoRepositorioOffline
+import pe.edu.upeu.pharmamobil.domain.repository.ProductoLocalRepository
+import pe.edu.upeu.pharmamobil.domain.repository.ProductoRemotoRepository
+import pe.edu.upeu.pharmamobil.domain.usecase.SincronizarUseCase
 import pe.edu.upeu.pharmamobil.domain.repository.AuthRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ClienteRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ProductoRepository
@@ -23,6 +31,7 @@ import pe.edu.upeu.pharmamobil.domain.sesion.AvisosDeSesion
 import pe.edu.upeu.pharmamobil.domain.sesion.DiagnosticoSesion
 import pe.edu.upeu.pharmamobil.domain.usecase.CerrarSesionUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.DescartarProductoUseCase
+import pe.edu.upeu.pharmamobil.domain.usecase.ObservarEstadoSincronizacionUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.IniciarSesionUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.ListarClientesUseCase
 import pe.edu.upeu.pharmamobil.domain.usecase.ObservarProductosUseCase
@@ -35,6 +44,7 @@ import pe.edu.upeu.pharmamobil.presentation.cliente.ClienteViewModel
 import pe.edu.upeu.pharmamobil.presentation.detalle.DetalleProductoViewModel
 import pe.edu.upeu.pharmamobil.presentation.diagnostico.DiagnosticoViewModel
 import pe.edu.upeu.pharmamobil.presentation.producto.ProductoViewModel
+import pe.edu.upeu.pharmamobil.presentation.permisos.PermisosViewModel
 import pe.edu.upeu.pharmamobil.presentation.sesion.SesionViewModel
 
 /** Calificador del Boolean que dice si la app es una compilacion de depuracion. */
@@ -51,8 +61,15 @@ val dataModule = module {
     // Offline-first: la pantalla lee de PharmaDb y la red solo la sincroniza.
     single { PharmaDb(get<CreadorDeDriver>().crear()) }
     single { ProductoLocal(get()) }
+    single<ProductoLocalRepository> { get<ProductoLocal>() }
     single<ProductoApi> { ProductoApiRest(get(), get()) }
-    single<ProductoRepository> { ProductoRepositorioOffline(get(), get()) }
+    single<ProductoRemotoRepository> { EnvioRepositorioRest(get()) }
+    // single: su Mutex debe ser el mismo para el init, el registro y el botón.
+    single { SincronizarUseCase(local = get(), remoto = get(), telemetria = get()) }
+    // Guía 13: el SDK de Firebase solo existe detrás de estas interfaces.
+    single<Telemetria> { TelemetriaFirebase() }
+    single<ServicioPush> { TokenPushFirebase() }
+    single<ProductoRepository> { ProductoRepositorioOffline(get<ProductoLocal>(), get<SincronizarUseCase>()) }
     single<ClienteRepository> { ClienteRepositorioRest(get(), get()) }
     // Herramienta de pruebas de la actividad autonoma (solo se ofrece en depuracion).
     single<DiagnosticoSesion> { DiagnosticoSesionRest(get(), get(), get()) }
@@ -65,6 +82,7 @@ val domainModule = module {
     factory { SincronizarProductosUseCase(get()) }
     factory { UltimaSincronizacionUseCase(get()) }
     factory { DescartarProductoUseCase(get()) }
+    factory { ObservarEstadoSincronizacionUseCase(get()) }
     factory { RegistrarClienteUseCase(get()) }
     factory { ListarClientesUseCase(get()) }
     factory { IniciarSesionUseCase(get()) }
@@ -73,7 +91,9 @@ val domainModule = module {
 }
 
 val presentationModule = module {
-    viewModel { ProductoViewModel(get(), get(), get(), get(), get()) }
+    viewModel { ProductoViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    // GestorPermisos y Notificador los aporta cada plataforma.
+    viewModel { PermisosViewModel(get(), get(), get(), get()) }
     viewModel { ClienteViewModel(get(), get()) }
     // El Compartidor lo aporta el platformModule de cada plataforma.
     viewModel { DetalleProductoViewModel(get(), get()) }

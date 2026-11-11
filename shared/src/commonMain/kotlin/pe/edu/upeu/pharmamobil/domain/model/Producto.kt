@@ -6,7 +6,11 @@ data class Producto(
     val precio:Double,
     val stock: Int,
     /** Motivo si PharmaSoft rechazo este producto creado sin red; null si no. */
-    val rechazo: String? = null
+    val rechazo: String? = null,
+    /** Intentos de envío fallidos por un error transitorio (Guía 13). */
+    val intentos: Int = 0,
+    /** Último error transitorio al enviar; null si no hubo. */
+    val ultimoError: String? = null
 ) {
 
 
@@ -29,7 +33,14 @@ data class Producto(
     val requiereReposicion: Boolean
         get() = stock < STOCK_MINIMO
 
+    /** Pendiente que agotó sus intentos por fallos transitorios (Guía 13). */
+    val agotoIntentos: Boolean
+        get() = rechazo == null && intentos >= MAX_INTENTOS_ENVIO
+
     companion object {
         const val STOCK_MINIMO = 10
+
+        /** Máximo de intentos de envío por fila antes de marcarla fallida. */
+        const val MAX_INTENTOS_ENVIO = 5
     }
 }

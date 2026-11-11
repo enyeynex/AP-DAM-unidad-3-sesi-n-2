@@ -2,12 +2,15 @@ package pe.edu.upeu.pharmamobil.data.local
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import pe.edu.upeu.pharmamobil.db.PharmaDb
 import pe.edu.upeu.pharmamobil.domain.model.Producto
+import pe.edu.upeu.pharmamobil.domain.repository.ProductoLocalRepository
+import pe.edu.upeu.pharmamobil.domain.usecase.SincronizarUseCase
 import pe.edu.upeu.pharmamobil.db.Producto as FilaProducto
 
 /**
@@ -15,7 +18,7 @@ import pe.edu.upeu.pharmamobil.db.Producto as FilaProducto
  * traduce entre las filas generadas por SQLDelight y el modelo de dominio.
  * No conoce Ktor ni los DTO de PharmaSoft.
  */
-class ProductoLocal(base: PharmaDb) {
+class ProductoLocal(base: PharmaDb) : ProductoLocalRepository {
 
     private val consultas = base.productoQueries
     private val sincronizaciones = base.sincronizacionQueries
@@ -26,10 +29,6 @@ class ProductoLocal(base: PharmaDb) {
             .asFlow()
             .mapToList(Dispatchers.Default)
             .map { filas -> filas.map { it.aDominio() } }
-
-    fun pendientes(): List<Producto> =
-        consultas.listarPendientes().executeAsList()
-            .map { it.aDominio() }
 
     /** Guarda lo creado sin red con un id negativo y la marca pendiente = 1. */
     fun guardarPendiente(producto: Producto): Producto {
@@ -47,7 +46,7 @@ class ProductoLocal(base: PharmaDb) {
      * del servidor, con su id real. Si la bajada posterior falla, el producto
      * ya no se vuelve a enviar y no se duplica en el servidor.
      */
-    fun confirmarEnviado(idLocal: Long, delServidor: Producto) {
+    override fun confirmar(idLocal: Long, delServidor: Producto) {
         consultas.transaction {
             consultas.borrarPorId(idLocal)
             consultas.insertar(
@@ -62,6 +61,8 @@ class ProductoLocal(base: PharmaDb) {
      * lo que el usuario creo sin red no se toca. Todo va en una transaccion
      * para que el Flow emita una sola vez y la lista no parpadee.
      */
+    override fun conciliar(delServidor: List<Producto>) = reemplazarSincronizados(delServidor)
+
     fun reemplazarSincronizados(productos: List<Producto>) {
         consultas.transaction {
             consultas.borrarSincronizados()
@@ -78,7 +79,7 @@ class ProductoLocal(base: PharmaDb) {
         consultas.buscarPorId(id).executeAsOneOrNull()?.aDominio()
 
     /** PharmaSoft no acepto el pendiente: se guarda el motivo y deja de enviarse. */
-    fun marcarRechazado(id: Long, motivo: String) {
+    override fun marcarFallida(id: Long, motivo: String) {
         consultas.marcarRechazado(motivo, id)
     }
 
@@ -87,13 +88,46 @@ class ProductoLocal(base: PharmaDb) {
         consultas.descartarPendiente(id)
     }
 
+    /** Pendientes que todavía pueden enviarse: sin rechazo y con intentos disponibles, en orden de creación. */
+    override fun pendientes(maxIntentos: Int): List<Producto> =
+        consultas.pendientesPorEnviar(maxIntentos.toLong()).executeAsList()
+            .map { it.aDominio() }
+
+    /** Atajo para pruebas y diagnóstico: con el máximo de intentos del caso de uso. */
+    fun pendientes(): List<Producto> = pendientes(SincronizarUseCase.MAX_INTENTOS)
+
+    override fun observarPendientes(maxIntentos: Int): Flow<Int> =
+        consultas.contarPendientes(maxIntentos.toLong())
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+            .map { it.toInt() }
+
+    override fun observarFallidas(maxIntentos: Int): Flow<Int> =
+        consultas.contarFallidas(maxIntentos.toLong())
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+            .map { it.toInt() }
+
+    override fun contarPendientes(maxIntentos: Int): Int =
+        consultas.contarPendientes(maxIntentos.toLong()).executeAsOne().toInt()
+
+    /** Fallo transitorio: suma un intento y recuerda el motivo. */
+    override fun sumarIntento(id: Long, motivo: String) {
+        consultas.sumarIntento(motivo, id)
+    }
+
+    /** «Reintentar ahora»: devuelve a la cola las filas que agotaron sus intentos. */
+    override fun reiniciarIntentos(maxIntentos: Int) {
+        consultas.reiniciarIntentos(maxIntentos.toLong())
+    }
+
     /** Instante (ms) de la ultima sincronizacion correcta; null si nunca hubo. */
     fun ultimaSincronizacion(): Flow<Long?> =
         sincronizaciones.ultima()
             .asFlow()
             .mapToOneOrNull(Dispatchers.Default)
 
-    fun registrarSincronizacion(instante: Long) {
+    override fun registrarSincronizacion(instante: Long) {
         sincronizaciones.registrar(instante)
     }
 
@@ -102,6 +136,8 @@ class ProductoLocal(base: PharmaDb) {
         nombre = nombre,
         precio = precio,
         stock = stock.toInt(),
-        rechazo = rechazo
+        rechazo = rechazo,
+        intentos = intentos.toInt(),
+        ultimoError = ultimoError
     )
 }

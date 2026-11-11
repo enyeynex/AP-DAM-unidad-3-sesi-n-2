@@ -24,6 +24,12 @@ import pe.edu.upeu.pharmamobil.data.repository.ProductoRepositorioOffline
 import pe.edu.upeu.pharmamobil.db.PharmaDb
 import pe.edu.upeu.pharmamobil.domain.platform.Compartidor
 import pe.edu.upeu.pharmamobil.domain.platform.FakeCompartidor
+import pe.edu.upeu.pharmamobil.domain.platform.MonitorDeRed
+import pe.edu.upeu.pharmamobil.domain.permiso.FakeGestorPermisos
+import pe.edu.upeu.pharmamobil.domain.permiso.FakeNotificador
+import pe.edu.upeu.pharmamobil.domain.permiso.GestorPermisos
+import pe.edu.upeu.pharmamobil.domain.port.Notificador
+import pe.edu.upeu.pharmamobil.presentation.permisos.PermisosViewModel
 import pe.edu.upeu.pharmamobil.domain.repository.AuthRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ClienteRepository
 import pe.edu.upeu.pharmamobil.domain.repository.ProductoRepository
@@ -73,6 +79,9 @@ class AppModuleTest {
         single<AlmacenSeguro> { FakeAlmacenSeguro() }
         single(ES_DEPURACION) { false }
         single<Compartidor> { FakeCompartidor() }
+        single<MonitorDeRed> { MonitorDeRed.Fijo(true) }
+        single<GestorPermisos> { FakeGestorPermisos() }
+        single<Notificador> { FakeNotificador() }
         single<CreadorDeDriver> { CreadorDeDriverEnMemoria() }
     }
 
@@ -133,5 +142,6 @@ class AppModuleTest {
         koin.get<DetalleProductoViewModel>()
         koin.get<SesionViewModel>()
         koin.get<DiagnosticoViewModel>()
+        koin.get<PermisosViewModel>()
     }
 }
