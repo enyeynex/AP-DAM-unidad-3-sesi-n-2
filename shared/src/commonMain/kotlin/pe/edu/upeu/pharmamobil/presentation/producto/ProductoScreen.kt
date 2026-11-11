@@ -96,8 +96,10 @@ fun ProductoScreen(
             antiguedad = textoAntiguedad(estadoSync.ultimaSync ?: uiState.ultimaSincronizacion, ahora)
         )
 
+        // Guía 14 (hueco 9): sin red solo se ve la banda de arriba; este aviso
+        // queda para un rechazo o un error del servidor.
         uiState.avisoRed?.let {
-            AvisoRed(mensaje = it, pendientes = uiState.pendientes)
+            AvisoSincronizacion(mensaje = it)
         }
 
         estadoSync.mensajeFallidas?.let { mensaje ->
@@ -285,10 +287,10 @@ private fun FormularioProductoCard(
 }
 
 
+/** Un fallo de sincronizacion que no es la falta de red: la lista sigue visible. */
 @Composable
-private fun AvisoRed(
-    mensaje: String,
-    pendientes: Int
+private fun AvisoSincronizacion(
+    mensaje: String
 ) {
 
     Surface(
@@ -304,21 +306,9 @@ private fun AvisoRed(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
-            Icon(imageVector = Icons.Default.WifiOff, contentDescription = null)
+            Icon(imageVector = Icons.Default.ErrorOutline, contentDescription = null)
 
-            Column {
-                Text(text = mensaje, style = MaterialTheme.typography.bodyMedium)
-                if (pendientes > 0) {
-                    Text(
-                        text = if (pendientes == 1) {
-                            "1 producto pendiente de enviar"
-                        } else {
-                            "$pendientes productos pendientes de enviar"
-                        },
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-            }
+            Text(text = mensaje, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

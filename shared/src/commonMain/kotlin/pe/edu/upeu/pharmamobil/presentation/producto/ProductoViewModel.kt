@@ -250,14 +250,16 @@ class ProductoViewModel(
         }
     }
 
-    private fun avisoDe(fallo: Throwable): String =
+    /**
+     * Guía 14 (hueco 9): sin red no se agrega un segundo aviso. La banda de
+     * sincronización de la Guía 13 ya dice «Sin conexión · N cambios por
+     * enviar»; aquí solo quedan los fallos que esa banda no explica (el
+     * servidor respondió con un error, la sesión, un tiempo agotado...).
+     */
+    private fun avisoDe(fallo: Throwable): String? =
         if (fallo is FalloSesionException && fallo.error == ErrorSesion.SinConexion) {
-            AVISO_SIN_CONEXION
+            null
         } else {
             "No se pudo sincronizar: ${fallo.message ?: "error desconocido"}"
         }
-
-    companion object {
-        const val AVISO_SIN_CONEXION = "Sin conexión: mostrando datos guardados"
-    }
 }

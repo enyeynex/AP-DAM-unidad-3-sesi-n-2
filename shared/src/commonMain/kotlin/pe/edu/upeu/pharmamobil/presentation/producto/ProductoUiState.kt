@@ -7,7 +7,10 @@ data class ProductoUiState(
     val mensajeExito: String? = null,
     /** Hay una sincronizacion con PharmaSoft en curso. */
     val sincronizando: Boolean = false,
-    /** Aviso cuando la ultima sincronizacion fallo; la lista sigue visible. */
+    /**
+     * Aviso cuando la ultima sincronizacion fallo por algo que no es la falta
+     * de red (esa la muestra la banda de sincronizacion, Guía 14 hueco 9).
+     */
     val avisoRed: String? = null,
     /** Productos creados sin red que PharmaSoft todavia no conoce. */
     val pendientes: Int = 0,
