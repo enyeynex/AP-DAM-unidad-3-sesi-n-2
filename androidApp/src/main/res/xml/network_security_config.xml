@@ -2,11 +2,18 @@
 <!--
     PharmaSoft corre en el equipo por HTTP (sin TLS) durante el desarrollo.
     Android bloquea el trafico en claro por defecto: se permite solo para
-    el anfitrion visto desde el emulador.
+    los anfitriones de prueba, nunca para cualquier dominio.
+
+    Guía 14 (celulares reales): reemplaza 10.40.29.85 por la IP de tu PC en
+    la wifi (ipconfig en Windows, «Dirección IPv4») y compila con la misma IP:
+    -PurlServicio=http://10.40.29.85:8080/api/v1/
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
+        <!-- Emulador: el equipo anfitrion -->
         <domain includeSubdomains="false">10.0.2.2</domain>
         <domain includeSubdomains="false">localhost</domain>
+        <!-- Celular real en la misma red: IP de la PC (REEMPLAZAR) -->
+        <domain includeSubdomains="false">10.40.29.85</domain>
     </domain-config>
 </network-security-config>
