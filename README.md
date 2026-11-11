@@ -385,6 +385,17 @@ Instalar en un celular conectado por USB: `adb install -r entrega\Equipo1_Proyec
    clientes entre sí; si los celulares no llegan a la PC, usa el punto de acceso del teléfono.
 5. PharmaSoft debe escuchar en todas las interfaces (`server.address=0.0.0.0`), no solo en
    `localhost`.
+6. Si la red aísla los equipos (wifi de la universidad), usa la depuración inalámbrica y un
+   túnel: compila con `-PurlServicio=http://localhost:8080/api/v1/` y, por cada celular,
+
+   ```powershell
+   $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+   & $adb pair <IP>:<puerto-de-vinculación>     # pide el código de 6 dígitos
+   & $adb connect <IP>:<puerto-principal>
+   & $adb -s <IP>:<puerto-principal> reverse tcp:8080 tcp:8080
+   ```
+
+   El modo avión corta el túnel: al volver, repite `connect` y `reverse`.
 
 ### 5. R8
 
